@@ -93,17 +93,23 @@ function showerror(io::IO, ex::TypeError)
 end
 
 function showerror(io::IO, ex, bt; backtrace=true)
+    emptybt = isempty(bt) || (first(bt) isa StackFrame && first(bt).func === Symbol("top-level scope") && first(bt).file === Symbol(""))
     try
-        showerror(io, ex)
+        if !emptybt
+            printstyled(io, nameof(typeof(ex)), '!', color=Base.error_color(), bold=true)
+            println(io, " Stacktrace:")
+            backtrace && show_backtrace(io, bt)
+        end
     finally
-        backtrace && show_backtrace(io, bt)
+        print(io, if emptybt " " else "\n\n " end)
+        showerror(io, ex)
     end
 end
 
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
-    !isa(ex.error, LoadError) && print(io, "LoadError: ")
+    !isa(ex.error, LoadError) && print(io, "LoadError")
+    println(io, " in expression starting at $(ex.file):$(ex.line):")
     showerror(io, ex.error, bt, backtrace=backtrace)
-    print(io, "\nin expression starting at $(ex.file):$(ex.line)")
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
@@ -628,11 +634,8 @@ const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black
 function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     num_frames = length(trace)
     ndigits_max = ndigits(num_frames)
-
-    println(io, "\nStacktrace:")
-
     for (i, (frame, n)) in enumerate(trace)
-        print_stackframe(io, i, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
+        print_stackframe(io, length(trace)+1-i, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
         if i < num_frames
             println(io)
             print_linebreaks && println(io)
@@ -688,12 +691,10 @@ function show_reduced_backtrace(io::IO, t::Vector)
 
     try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
 
-    println(io, "\nStacktrace:")
-
     ndigits_max = ndigits(length(t))
 
     push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
-    frame_counter = 1
+    frame_counter = length(t) - 1
     for i in eachindex(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
 
@@ -715,9 +716,9 @@ function show_reduced_backtrace(io::IO, t::Vector)
                 println(io)
                 stacktrace_linebreaks() && println(io)
             end
-            frame_counter += cycle_length * repetitions
+            frame_counter -= cycle_length * repetitions
         end
-        frame_counter += 1
+        frame_counter -= 1
     end
 end
 
@@ -806,11 +807,12 @@ function show_backtrace(io::IO, t::Vector)
     end
 
     # t is a pre-processed backtrace (ref #12856)
-    if t isa Vector{Any} && (length(t) == 0 || t[1] isa Tuple{StackFrame,Int})
-        filtered = t
-    else
-        filtered = process_backtrace(t)
-    end
+    filtered = reverse(
+        if t isa Vector{Any} && (length(t) == 0 || t[1] isa Tuple{StackFrame,Int})
+            t
+        else
+            process_backtrace(t)
+        end)
     isempty(filtered) && return
 
     if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
