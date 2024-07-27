@@ -1003,6 +1003,7 @@ function show_exception_stack(io::IO, stack)
         end
         exc, bt = stack[i]
         showerror(io, exc, bt, backtrace = bt!==nothing)
+        invokelatest(show_error_explanation, io, exc, bt)
         i == 1 || println(io)
     end
 end

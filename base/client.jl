@@ -116,9 +116,12 @@ display_error(stack::ExceptionStack) = display_error(stderr, stack)
 # these forms are depended on by packages outside Julia
 function display_error(io::IO, er, bt)
     showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
+    invokelatest(show_error_explanation, io, er, bt)
     println(io)
 end
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
+
+show_error_explanation(io::IO, _er, _bt) = nothing
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
