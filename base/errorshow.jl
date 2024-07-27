@@ -43,29 +43,6 @@ function showerror(io::IO, ex::Meta.ParseError)
     end
 end
 
-function showerror(io::IO, ex::BoundsError)
-    print(io, "BoundsError")
-    if isdefined(ex, :a)
-        print(io, ": attempt to access ")
-        summary(io, ex.a)
-        if isdefined(ex, :i)
-            print(io, " at index [")
-            if ex.i isa AbstractRange
-                print(io, ex.i)
-            elseif ex.i isa AbstractString
-                show(io, ex.i)
-            else
-                for (i, x) in enumerate(ex.i)
-                    i > 1 && print(io, ", ")
-                    show_index(io, x)
-                end
-            end
-            print(io, ']')
-        end
-    end
-    Experimental.show_error_hints(io, ex)
-end
-
 function showerror(io::IO, ex::TypeError)
     print(io, "TypeError: ")
     if ex.expected === Bool
@@ -156,9 +133,6 @@ showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
 showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
 showerror(io::IO, ::EOFError) = print(io, "EOFError: read end of file")
 showerror(io::IO, ex::ErrorException) = print(io, ex.msg)
-showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
-                                   show(io, ex.key);
-                                   print(io, " not found"))
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
 showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
 showerror(io::IO, ex::DimensionMismatch) = print(io, "DimensionMismatch: ", ex.msg)
@@ -167,36 +141,6 @@ showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
 showerror(io::IO, ex::UndefKeywordError) =
     print(io, "UndefKeywordError: keyword argument `$(ex.var)` not assigned")
-
-function showerror(io::IO, ex::UndefVarError)
-    print(io, "UndefVarError: `$(ex.var)` not defined")
-    if isdefined(ex, :scope)
-        scope = ex.scope
-        if scope isa Module
-            print(io, " in `$scope`")
-        elseif scope === :static_parameter
-            print(io, " in static parameter matching")
-        else
-            print(io, " in $scope scope")
-        end
-    end
-    Experimental.show_error_hints(io, ex)
-end
-
-function showerror(io::IO, ex::InexactError)
-    print(io, "InexactError: ", ex.func, '(')
-    T = first(ex.args)
-    nameof(T) === ex.func || print(io, T, ", ")
-    # `join` calls `string` on its arguments, which shadows the size of e.g. Inf16
-    # as `string(Inf16) == "Inf"` instead of "Inf16". Thus we cannot use `join` here.
-    for arg in ex.args[2:end-1]
-        show(io, arg)
-        print(io, ", ")
-    end
-    show(io, ex.args[end])
-    print(io, ")")
-    Experimental.show_error_hints(io, ex)
-end
 
 function showerror(io::IO, ex::CanonicalIndexError)
     print(io, "CanonicalIndexError: ", ex.func, " not defined for ", ex.type)
@@ -371,12 +315,6 @@ function showerror(io::IO, ex::MethodError)
         @error "Error showing method candidates, aborted" exception=ex,catch_backtrace()
     end
     nothing
-end
-
-function showerror(io::IO, exc::FieldError)
-    @nospecialize
-    print(io, "FieldError: type $(exc.type |> nameof) has no field $(exc.field)")
-    Base.Experimental.show_error_hints(io, exc)
 end
 
 striptype(::Type{T}) where {T} = T
@@ -1018,45 +956,6 @@ function show(io::IO, ip::InterpreterIP)
         print(io, " in $(ip.code) at statement $(Int(ip.stmt))")
     end
 end
-
-# handler for displaying a hint in case the user tries to call
-# the instance of a number (probably missing the operator)
-# eg: (1 + 2)(3 + 4)
-function noncallable_number_hint_handler(io, ex, arg_types, kwargs)
-    @nospecialize
-    if ex.f isa Number
-        print(io, "\nMaybe you forgot to use an operator such as ")
-        printstyled(io, "*, ^, %, / etc. ", color=:cyan)
-        print(io, "?")
-    end
-end
-
-Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
-
-# handler for displaying a hint in case the user tries to call setindex! on
-# something that doesn't support it:
-#  - a number (probably attempting to use wrong indexing)
-#    eg: a = [1 2; 3 4]; a[1][2] = 5
-#  - a type (probably tried to initialize without parentheses)
-#    eg: d = Dict; d["key"] = 2
-function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
-    @nospecialize
-    if ex.f == setindex!
-        T = arg_types[1]
-        if T <: Number
-            print(io, "\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ")
-            printstyled(io, "a[1, 2]", color=:cyan)
-            print(io, " rather than a[1][2]")
-        else isType(T)
-            Tx = T.parameters[1]
-            print(io, "\nYou attempted to index the type $Tx, rather than an instance of the type. Make sure you create the type using its constructor: ")
-            printstyled(io, "d = $Tx([...])", color=:cyan)
-            print(io, " rather than d = $Tx")
-        end
-    end
-end
-
-Experimental.register_error_hint(nonsetable_type_hint_handler, MethodError)
 
 # Display a hint in case the user tries to use the + operator on strings
 # (probably attempting concatenation)

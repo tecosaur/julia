@@ -228,6 +228,11 @@ deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 version = "1.11.0"
 
+[[deps.Explanations]]
+deps = ["JuliaSyntaxHighlighting", "StyledStrings"]
+uuid = "60c66056-e365-4634-805a-142f0b4b35b5"
+version = "1.11.0"
+
 [[deps.RegistryInstances]]
 deps = ["LazilyInitializedFields", "Pkg", "TOML", "Tar"]
 git-tree-sha1 = "ffd19052caf598b8653b99404058fce14828be51"
