@@ -115,11 +115,22 @@ display_error(stack::ExceptionStack) = display_error(stderr, stack)
 
 # these forms are depended on by packages outside Julia
 function display_error(io::IO, er, bt)
+    ensure_explanations_stdlib()
     showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
     invokelatest(show_error_explanation, io, er, bt)
     println(io)
 end
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
+
+function ensure_explanations_stdlib()
+    pkg = PkgId(UUID(0x60c66056_e365_4634_805a_142f0b4b35b5), "Explanations")
+    haskey(Base.loaded_modules, pkg) && return
+    try
+        return Base.require_stdlib(pkg)
+    catch ex
+        @warn "Failed to import REPL" exception=(ex, catch_backtrace())
+    end
+end
 
 show_error_explanation(io::IO, _er, _bt) = nothing
 
